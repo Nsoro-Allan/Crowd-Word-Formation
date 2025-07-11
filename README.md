@@ -24,9 +24,9 @@ No additional setup or installation is required.
 ## Project Structure
 
 ```
-├── index.html      # Main HTML file
-├── style.css       # Stylesheet for the application
-├── app.js          # JavaScript logic for the game
+├── index.html   # Main HTML file
+├── style.css    # Stylesheet for the application
+├── app.js       # JavaScript logic for the game
 ```
 
 ## Author
