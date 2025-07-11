@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crowd Word Formation</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #08090a;
+            color: #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: #1a202c;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 900px;
+        }
+        h1 {
+            color: #e2e8f0;
+            text-align: center;
+            margin-bottom: 24px;
+            font-size: 2rem;
+        }
+        .word-input {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .word-input input {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px;
+            background: #2d3748;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            transition: border-color 0.2s;
+        }
+        .word-input input:focus {
+            border-color: #38b2ac;
+            outline: none;
+        }
+        .word-input button {
+            padding: 12px 24px;
+            background-color: #38b2ac;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        .word-input button:hover {
+            background-color: #319795;
+        }
+        .word-list {
+            list-style: none;
+            padding: 0;
+            background: #2d3748;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #4a5568;
+        }
+        .word-list li {
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            color: #e2e8f0;
+            border-bottom: 1px solid #4a5568;
+        }
+        .word-list li:last-child {
+            border-bottom: none;
+        }
+        .word-list button {
+            background-color: #e53e3e;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .word-list button:hover {
+            background-color: #c53030;
+        }
+        .duration-input {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 16px 0;
+        }
+        .duration-input label {
+            font-weight: 500;
+            color: #a0aec0;
+        }
+        .duration-input input {
+            width: 80px;
+            padding: 8px;
+            background: #2d3748;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+        }
+        .duration-input input:focus {
+            border-color: #38b2ac;
+            outline: none;
+        }
+        .generate-button {
+            padding: 14px 28px;
+            background-color: #2f855a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            align-self: center;
+        }
+        .generate-button:hover {
+            background-color: #276749;
+        }
+        canvas {
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            margin-top: 24px;
+            width: 100%;
+            max-width: 800px;
+            height: auto;
+            aspect-ratio: 4 / 3;
+        }
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.5rem;
+            }
+            .word-input {
+                flex-direction: column;
+            }
+            .word-input input, .word-input button {
+                width: 100%;
+            }
+            .duration-input {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .generate-button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Crowd Word Formation</h1>
+        <div class="word-input">
+            <input type="text" id="wordInput" placeholder="Enter a word">
+            <button onclick="addWord()">Add Word</button>
+        </div>
+        <ul id="wordList" class="word-list"></ul>
+        <div class="duration-input">
+            <label for="durationInput">Seconds between words:</label>
+            <input type="number" id="durationInput" value="5" min="1" step="1">
+        </div>
+        <button class="generate-button" onclick="generateAnimation()">Generate Animation</button>
+        <canvas id="animationCanvas" width="800" height="600"></canvas>
+    </div>
+
+    <script>
+        const wordList = [];
+        const canvas = document.getElementById('animationCanvas');
+        const ctx = canvas.getContext('2d');
+        const NUM_PEOPLE = 5000;
+        let people = [];
+        let targetSets = [];
+        let currentTargetIndex = 0;
+        let formationCompleteTime = null;
+        let lastTime = null;
+        let duration = 5;
+
+        function addWord() {
+            const input = document.getElementById('wordInput');
+            const word = input.value.trim().toUpperCase();
+            if (word && word.length <= 20) {
+                wordList.push(word);
+                input.value = '';
+                updateWordListUI();
+            }
+        }
+
+        function removeWord(index) {
+            wordList.splice(index, 1);
+            updateWordListUI();
+        }
+
+        function updateWordListUI() {
+            const list = document.getElementById('wordList');
+            list.innerHTML = '';
+            wordList.forEach((word, index) => {
+                const li = document.createElement('li');
+                li.textContent = word;
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'Remove';
+                removeBtn.onclick = () => removeWord(index);
+                li.appendChild(removeBtn);
+                list.appendChild(li);
+            });
+        }
+
+        function getTargets(word) {
+            const textCanvas = document.createElement('canvas');
+            const tCtx = textCanvas.getContext('2d');
+            tCtx.font = '60px Arial Black';
+            const textWidth = tCtx.measureText(word).width;
+            textCanvas.width = Math.ceil(textWidth) + 50;
+            textCanvas.height = 100;
+            tCtx.fillStyle = 'white';
+            tCtx.fillRect(0, 0, textCanvas.width, textCanvas.height);
+            tCtx.fillStyle = 'black';
+            tCtx.font = '60px Arial Black';
+            tCtx.textAlign = 'center';
+            tCtx.textBaseline = 'middle';
+            tCtx.fillText(word, textCanvas.width / 2, 50);
+
+            const imageData = tCtx.getImageData(0, 0, textCanvas.width, 100);
+            const data = imageData.data;
+            const blackPixels = [];
+
+            for (let i = 0; i < textCanvas.width; i += 1) {
+                for (let j = 0; j < 100; j += 1) {
+                    const index = 4 * (j * textCanvas.width + i);
+                    if (data[index] < 128) {
+                        blackPixels.push({ i, j });
+                    }
+                }
+            }
+
+            if (blackPixels.length === 0) return [];
+
+            const minI = Math.min(...blackPixels.map(p => p.i));
+            const maxI = Math.max(...blackPixels.map(p => p.i));
+            const minJ = Math.min(...blackPixels.map(p => p.j));
+            const maxJ = Math.max(...blackPixels.map(p => p.j));
+            const width = maxI - minI;
+            const scale = 100 / width;
+            const centerJ = (minJ + maxJ) / 2;
+
+            const targets = [];
+            for (let k = 0; k < NUM_PEOPLE; k++) {
+                const p = blackPixels[Math.floor(Math.random() * blackPixels.length)];
+                const x = (p.i - minI) * scale - 50;
+                const y = (p.j - centerJ) * scale;
+                targets.push({ x, y });
+            }
+            return targets;
+        }
+
+        function generateAnimation() {
+            if (wordList.length === 0) {
+                alert('Please add at least one word!');
+                return;
+            }
+            duration = parseInt(document.getElementById('durationInput').value) || 5;
+            targetSets = wordList.map(word => getTargets(word));
+            people = [];
+            for (let i = 0; i < NUM_PEOPLE; i++) {
+                const startX = Math.random() * 120 - 60;
+                const startY = Math.random() * 90 - 45;
+                const targets = targetSets.map(ts => ts.length > 0 ? { ...ts[i % ts.length] } : { x: 0, y: 0 });
+                people.push({
+                    pos: { x: startX, y: startY },
+                    targets: targets,
+                    speed: 30
+                });
+            }
+            currentTargetIndex = 0;
+            formationCompleteTime = null;
+            lastTime = null;
+            requestAnimationFrame(animate);
+        }
+
+        function drawPerson(x, y) {
+            ctx.fillStyle = '#ADD8E6';
+            ctx.beginPath();
+            ctx.arc(x, y, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ADD8E6';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, y + 2);
+            ctx.lineTo(x, y + 6);
+            ctx.moveTo(x - 2, y + 4);
+            ctx.lineTo(x + 2, y + 4);
+            ctx.moveTo(x, y + 6);
+            ctx.lineTo(x - 2, y + 8);
+            ctx.moveTo(x, y + 6);
+            ctx.lineTo(x + 2, y + 8);
+            ctx.stroke();
+        }
+
+        function animate(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            ctx.fillStyle = '#1a202c';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            let allArrived = true;
+            people.forEach(person => {
+                const target = person.targets[currentTargetIndex];
+                const dx = target.x - person.pos.x;
+                const dy = target.y - person.pos.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > 0.1) {
+                    allArrived = false;
+                    const moveDist = Math.min(person.speed * deltaTime, distance);
+                    person.pos.x += (dx / distance) * moveDist;
+                    person.pos.y += (dy / distance) * moveDist;
+                }
+            });
+
+            if (allArrived) {
+                if (!formationCompleteTime) {
+                    formationCompleteTime = timestamp;
+                } else if ((timestamp - formationCompleteTime) / 1000 >= duration) {
+                    currentTargetIndex = (currentTargetIndex + 1) % targetSets.length;
+                    formationCompleteTime = null;
+                }
+            } else {
+                formationCompleteTime = null;
+            }
+
+            const scaleX = canvas.width / 120;
+            const scaleY = canvas.height / 90;
+            people.forEach(person => {
+                const screenX = (person.pos.x + 60) * scaleX;
+                const screenY = (person.pos.y + 45) * scaleY;
+                drawPerson(screenX, screenY);
+            });
+
+            requestAnimationFrame(animate);
+        }
+    </script>
+</body>
+</html>
