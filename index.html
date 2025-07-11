@@ -10,7 +10,14 @@
     <div class="container">
       <h1>Crowd Word Formation</h1>
       <div class="word-input">
-        <input type="text" id="wordInput" placeholder="Enter a word" />
+        <input
+          type="text"
+          id="wordInput"
+          placeholder="Enter a word"
+          maxlength="20"
+          oninput="updateCharCount()"
+        />
+        <span class="char-counter" id="charCount">0/20</span>
         <button onclick="addWord()">Add Word</button>
       </div>
       <ul id="wordList" class="word-list"></ul>
@@ -21,9 +28,8 @@
       <button class="generate-button" onclick="generateAnimation()">
         Generate Animation
       </button>
-      <canvas id="animationCanvas" width="800" height="600"></canvas>
+      <canvas id="animationCanvas" width="1000" height="600"></canvas>
     </div>
-
     <script src="./app.js"></script>
   </body>
 </html>
