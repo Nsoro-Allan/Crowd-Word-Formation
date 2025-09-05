@@ -1,7 +1,6 @@
 const wordList = [];
 const canvas = document.getElementById("animationCanvas");
 const ctx = canvas.getContext("2d");
-const NUM_PEOPLE = 32000; // Doubled to 32,000
 let people = [];
 let targetSets = [];
 let currentTargetIndex = 0;
@@ -45,7 +44,31 @@ function updateWordListUI() {
   });
 }
 
-function getTargets(word) {
+// Cache for text targets to avoid recalculation
+const targetCache = new Map();
+
+// Calculate optimal people count based on word complexity
+function calculateOptimalPeopleCount(words) {
+  let maxComplexity = 0;
+
+  words.forEach((word) => {
+    // Calculate complexity based on character count and unique characters
+    const uniqueChars = new Set(word.split("")).size;
+    const complexity = word.length * uniqueChars * 150; // Base multiplier for good coverage
+    maxComplexity = Math.max(maxComplexity, complexity);
+  });
+
+  // Ensure minimum and maximum bounds for performance
+  return Math.min(Math.max(maxComplexity, 2000), 12000);
+}
+
+function getTargets(word, peopleCount) {
+  // Check cache first
+  const cacheKey = `${word}_${peopleCount}`;
+  if (targetCache.has(cacheKey)) {
+    return targetCache.get(cacheKey);
+  }
+
   const textCanvas = document.createElement("canvas");
   const tCtx = textCanvas.getContext("2d");
   tCtx.font = "70px Arial Black";
@@ -70,8 +93,9 @@ function getTargets(word) {
   const data = imageData.data;
   const blackPixels = [];
 
-  for (let i = 0; i < textCanvas.width; i += 1) {
-    for (let j = 0; j < textCanvas.height; j += 1) {
+  // Sample pixels more efficiently - skip every other pixel for performance
+  for (let i = 0; i < textCanvas.width; i += 2) {
+    for (let j = 0; j < textCanvas.height; j += 2) {
       const index = 4 * (j * textCanvas.width + i);
       if (data[index] < 128) {
         blackPixels.push({ i, j });
@@ -79,7 +103,10 @@ function getTargets(word) {
     }
   }
 
-  if (blackPixels.length === 0) return [];
+  if (blackPixels.length === 0) {
+    targetCache.set(cacheKey, []);
+    return [];
+  }
 
   const minI = Math.min(...blackPixels.map((p) => p.i));
   const maxI = Math.max(...blackPixels.map((p) => p.i));
@@ -92,12 +119,15 @@ function getTargets(word) {
   const centerJ = (minJ + maxJ) / 2;
 
   const targets = [];
-  for (let k = 0; k < NUM_PEOPLE; k++) {
+  for (let k = 0; k < peopleCount; k++) {
     const p = blackPixels[Math.floor(k % blackPixels.length)];
     const x = (p.i - minI) * scaleX - 75;
     const y = (p.j - centerJ) * scaleY;
     targets.push({ x, y });
   }
+
+  // Cache the result
+  targetCache.set(cacheKey, targets);
   return targets;
 }
 
@@ -107,9 +137,16 @@ function generateAnimation() {
     return;
   }
   duration = parseInt(document.getElementById("durationInput").value) || 5;
-  targetSets = wordList.map((word) => getTargets(word));
+
+  // Calculate optimal people count based on word complexity
+  const optimalPeopleCount = calculateOptimalPeopleCount(wordList);
+
+  // Clear cache and regenerate targets with optimal people count
+  targetCache.clear();
+  targetSets = wordList.map((word) => getTargets(word, optimalPeopleCount));
+
   people = [];
-  for (let i = 0; i < NUM_PEOPLE; i++) {
+  for (let i = 0; i < optimalPeopleCount; i++) {
     const startX = Math.random() * 150 - 75;
     const startY = Math.random() * 90 - 45;
     const targets = targetSets.map((ts) =>
@@ -118,7 +155,7 @@ function generateAnimation() {
     people.push({
       pos: { x: startX, y: startY },
       targets: targets,
-      speed: 30,
+      speed: 35 + Math.random() * 15, // Increased speed for smoother formation
     });
   }
   currentTargetIndex = 0;
@@ -127,46 +164,86 @@ function generateAnimation() {
   requestAnimationFrame(animate);
 }
 
-function drawPerson(x, y) {
-  ctx.fillStyle = "#ADD8E6";
-  ctx.beginPath();
-  ctx.arc(x, y, 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "#ADD8E6";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x, y + 2);
-  ctx.lineTo(x, y + 6);
-  ctx.moveTo(x - 2, y + 4);
-  ctx.lineTo(x + 2, y + 4);
-  ctx.moveTo(x, y + 6);
-  ctx.lineTo(x - 2, y + 8);
-  ctx.moveTo(x, y + 6);
-  ctx.lineTo(x + 2, y + 8);
-  ctx.stroke();
+// Ultra-optimized drawing with minimal operations
+function drawPeople(people, scaleX, scaleY) {
+  const peopleLength = people.length;
+
+  // For large crowds, use simplified dots for better performance
+  if (peopleLength > 8000) {
+    ctx.fillStyle = "#ADD8E6";
+    ctx.beginPath();
+    for (let i = 0; i < peopleLength; i++) {
+      const person = people[i];
+      const screenX = (person.pos.x + 75) * scaleX;
+      const screenY = (person.pos.y + 45) * scaleY;
+      ctx.moveTo(screenX + 1.5, screenY);
+      ctx.arc(screenX, screenY, 1.5, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  } else {
+    // Full stick figures for smaller crowds
+    ctx.fillStyle = "#ADD8E6";
+    ctx.beginPath();
+    for (let i = 0; i < peopleLength; i++) {
+      const person = people[i];
+      const screenX = (person.pos.x + 75) * scaleX;
+      const screenY = (person.pos.y + 45) * scaleY;
+      ctx.moveTo(screenX + 2, screenY);
+      ctx.arc(screenX, screenY, 2, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    // Draw stick figures
+    ctx.strokeStyle = "#ADD8E6";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < peopleLength; i++) {
+      const person = people[i];
+      const x = (person.pos.x + 75) * scaleX;
+      const y = (person.pos.y + 45) * scaleY;
+      // Body
+      ctx.moveTo(x, y + 2);
+      ctx.lineTo(x, y + 6);
+      // Arms
+      ctx.moveTo(x - 2, y + 4);
+      ctx.lineTo(x + 2, y + 4);
+      // Legs
+      ctx.moveTo(x, y + 6);
+      ctx.lineTo(x - 2, y + 8);
+      ctx.moveTo(x, y + 6);
+      ctx.lineTo(x + 2, y + 8);
+    }
+    ctx.stroke();
+  }
 }
 
 function animate(timestamp) {
   if (!lastTime) lastTime = timestamp;
-  const deltaTime = (timestamp - lastTime) / 1000;
+  const deltaTime = Math.min((timestamp - lastTime) / 1000, 0.025); // Smoother cap for better performance
   lastTime = timestamp;
 
   ctx.fillStyle = "#1a202c";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   let allArrived = true;
-  people.forEach((person) => {
+
+  // Optimized batch processing with early exit for performance
+  const peopleLength = people.length;
+  for (let i = 0; i < peopleLength; i++) {
+    const person = people[i];
     const target = person.targets[currentTargetIndex];
     const dx = target.x - person.pos.x;
     const dy = target.y - person.pos.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance > 0.1) {
+    const distanceSquared = dx * dx + dy * dy;
+
+    if (distanceSquared > 0.01) {
       allArrived = false;
+      const distance = Math.sqrt(distanceSquared);
       const moveDist = Math.min(person.speed * deltaTime, distance);
       person.pos.x += (dx / distance) * moveDist;
       person.pos.y += (dy / distance) * moveDist;
     }
-  });
+  }
 
   if (allArrived) {
     if (!formationCompleteTime) {
@@ -181,11 +258,9 @@ function animate(timestamp) {
 
   const scaleX = canvas.width / 150;
   const scaleY = canvas.height / 90;
-  people.forEach((person) => {
-    const screenX = (person.pos.x + 75) * scaleX;
-    const screenY = (person.pos.y + 45) * scaleY;
-    drawPerson(screenX, screenY);
-  });
+
+  // Use optimized batch drawing
+  drawPeople(people, scaleX, scaleY);
 
   requestAnimationFrame(animate);
 }
